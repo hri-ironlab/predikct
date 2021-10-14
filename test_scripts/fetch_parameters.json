@@ -1,0 +1,9 @@
+{
+    "reference_link_name" : "torso_lift_link",
+    "target_link_name" : "wrist_roll_link",
+    "velocity_command_topic" : "/teleop_commands",
+    "joint_command_topic" : "/arm_controller/joint_velocity/joint_commands",
+    "joint_state_topic" : "/joint_states",
+    "first_joint_name" : "shoulder_pan_joint",
+    "last_joint_name" : "wrist_roll_joint"
+}
