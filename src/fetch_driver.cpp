@@ -145,7 +145,6 @@ public:
         double tree_start = ros::Time::now().toSec();
         predikct::MotionCandidateNode tree_root(nullptr, &robot, current_state, 1, &tree_spec, 
         &reward, user, &last_velocity_command);
-        last_velocity_command = std::vector<double>(6, 0);
         tree_root.ChooseMotionCandidate(&(current_fetch_command_msg->velocity), &(last_null_vector));
         double tree_time = ros::Time::now().toSec() - tree_start;
         avg_search_time = (avg_search_time*search_time_window.size() + tree_time - search_time_window[oldest_search_time]) / search_time_window.size();
