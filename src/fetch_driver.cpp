@@ -94,8 +94,7 @@ public:
         }
         if(new_joint_positions.size() != joint_names.size())
         {
-            // Bad message, discard
-            ROS_ERROR("WARNING: Improperly sized joint positions (missing joint names)");
+            // Bad message or message about joints other than the arm, discard
             return;
         }
         last_joint_positions = new_joint_positions;
