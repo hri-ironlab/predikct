@@ -33,12 +33,10 @@ public:
     void GetBaseline(std::vector<double>* joint_velocities);
 
 private:
-    void GetPseudoInverse(Eigen::Matrix<double,Eigen::Dynamic,6>& pseudo_inverse);
-    void GetNullSpace(Eigen::Matrix<double,Eigen::Dynamic,6>& pseudo_inverse, Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic>& null_space);
+    void GetNullSpace();
 
     std::vector<boost::shared_ptr<MotionState>> motion_candidates_;
 
-    Eigen::Matrix<double,Eigen::Dynamic,6> pseudo_inverse_;
     Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic> null_space_;
     Eigen::VectorXd desired_velocity_;
     std::vector<double> desired_velocity_raw_;

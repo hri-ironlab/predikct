@@ -28,6 +28,7 @@ public:
         null_goals = last_null_vector;
         is_jacobian_calculated = false;
         is_position_calculated = false;
+        is_manipulability_calculated = false;
         time_in_future = 0.0;
     }
 
@@ -36,7 +37,7 @@ public:
     {
         double timestamp, time_increment, max_acceleration, current_velocity, current_position, target_velocity;
         time_increment = 0.01;
-        max_acceleration = 0.25; //Fetch: 0.075
+        max_acceleration = 0.075;
         time_in_future = time_into_future;
         for(int j = 0; j < (*starting_joint_positions).size(); j++)
         {
@@ -76,6 +77,7 @@ public:
         }
         is_jacobian_calculated = false;
         is_position_calculated = false;
+        is_manipulability_calculated = false;
     }
     ~MotionState()
     {}
@@ -87,6 +89,8 @@ public:
             return;
         }
         robot_model->GetJacobian(joint_positions, &jacobian);
+        Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic> jacobian_transpose = jacobian.transpose();
+        pseudo_inverse = jacobian_transpose * (jacobian * jacobian_transpose).inverse();
         is_jacobian_calculated = true;
     }
 
@@ -100,16 +104,32 @@ public:
         is_position_calculated = true;
     }
 
+    void CalculateManipulability(RobotModel* robot_model)
+    {
+        if(is_manipulability_calculated)
+        {
+            return;
+        }
+        if(!is_jacobian_calculated)
+        {
+            CalculateJacobian(robot_model);
+        }
+        manipulability = sqrt((jacobian * jacobian.transpose()).determinant());
+    }
+
     //Resulting positions after applying joint velocities over given time period
     std::vector<double> joint_positions;
     std::vector<double> joint_velocities;
     std::vector<double> commanded_velocities;
     std::vector<double> null_goals;
     bool is_jacobian_calculated;
+    bool is_manipulability_calculated;
     Eigen::Matrix<double,6,Eigen::Dynamic> jacobian;
+    Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic> pseudo_inverse;
     bool is_position_calculated;
     double time_in_future;
     KDL::Frame position;
+    double manipulability;
 };
 
 }

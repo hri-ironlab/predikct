@@ -1,6 +1,6 @@
 <launch>
-    <param name="/use_simulated_time" type="bool" value="true" />
-    <node pkg="predictive_velocity_controller" name="KCT_Controller" type="predictive_controller_node" output="screen">
+    <param name="/use_simulated_time" type="bool" value="false" />
+    <node pkg="predikct" name="KCT_Controller" type="predikct_fetch" output="screen">
         <param name="/planning_root_link" type="string" value="torso_lift_link" />
         <param name="/planning_tip_link" type="string" value="wrist_roll_link" />
         <param name="/number_of_joints" type="int" value="7" />
@@ -32,8 +32,6 @@
         <param name="/joint6_pos_up_limit" type="double" value="$(eval float('inf'))" />
         <param name="/joint6_pos_down_limit" type="double" value="$(eval float('inf'))" />
         <param name="/joint6_vel_limit" type="double" value="2.26" />
-        <param name="/user_model" type="int" value="2" />
-        <param name="/robot_type" type="int" value="0" />
         <remap from ="/planning_robot_urdf" to="/robot_description" />
         <remap from ="/joint_commands" to="/arm_controller/joint_velocity/joint_commands" />
     </node>

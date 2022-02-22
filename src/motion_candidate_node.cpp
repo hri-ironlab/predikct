@@ -5,9 +5,36 @@
 #include "predikct/reward_calculator.h"
 #include <random>
 #include <kdl/frames.hpp>
+#include <Eigen/Eigenvalues>
 
 namespace predikct
 {
+
+struct normal_random_variable
+{
+    normal_random_variable(Eigen::MatrixXd const& covar)
+        : normal_random_variable(Eigen::VectorXd::Zero(covar.rows()), covar)
+    {}
+
+    normal_random_variable(Eigen::VectorXd const& mean, Eigen::MatrixXd const& covar)
+        : mean(mean)
+    {
+        Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eigenSolver(covar);
+        transform = eigenSolver.eigenvectors() * eigenSolver.eigenvalues().cwiseSqrt().asDiagonal();
+    }
+
+    Eigen::VectorXd mean;
+    Eigen::MatrixXd transform;
+
+    Eigen::VectorXd operator()() const
+    {
+        static std::mt19937 gen{ std::random_device{}() };
+        static std::normal_distribution<> dist;
+
+        return mean + transform * Eigen::VectorXd{ mean.size() }.unaryExpr([&](double x) { return dist(gen); });
+    }
+};
+
 MotionCandidateNode::MotionCandidateNode(TreeNode* parent, RobotModel* robot_model, boost::shared_ptr<MotionState> state, int tree_depth, 
     TreeSpec* tree_spec, RewardCalculator* reward_calculator, UserModel* user_model, std::vector<double>* desired_velocity) 
     : TreeNode(parent, robot_model, state, tree_depth, tree_spec, reward_calculator, user_model)
@@ -33,38 +60,64 @@ std::vector<boost::shared_ptr<TreeNode>> MotionCandidateNode::GenerateChildren()
     motion_candidates_.clear();
 
     //Calculate movement that satisfies desired velocity using pseudo-inverse
-    GetPseudoInverse(pseudo_inverse_);
-    Eigen::VectorXd primary_movement = pseudo_inverse_ * desired_velocity_;
-    bool verbose = false;
-    if(verbose)
-    {
-        ROS_ERROR("Primary Vels: %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f", primary_movement(0), primary_movement(1), primary_movement(2), primary_movement(3), primary_movement(4), primary_movement(5), primary_movement(6));
-    }
+    Eigen::VectorXd primary_movement = state_->pseudo_inverse * desired_velocity_;
 
     //Generate possible movement commands for using redundant DOF within null space of pseudo-inverse
-    GetNullSpace(pseudo_inverse_, null_space_);
-    //Generate null space movement around following the same null movement goals from previous timesteps with added noise
-    std::random_device rd;
-    std::default_random_engine generator(rd());
-    std::vector<std::normal_distribution<double>> distributions;
-    for(int i = 0; i < state_->joint_velocities.size(); ++i)
+    GetNullSpace();
+    //Generate null space movement around following the same null movement goals from previous timesteps with added noise sampled from a multivariate distribution with mean of previous null space motion and covariance = identity matrix
+    Eigen::VectorXd base_null_eigen(state_->joint_positions.size());
+    Eigen::VectorXd target_null_eigen(state_->joint_positions.size());
+    Eigen::VectorXd mean_null_eigen(state_->joint_positions.size());
+    bool all_zeros = true;
+    for(int j = 0; j < state_->joint_positions.size(); j++)
     {
-        distributions.push_back(std::normal_distribution<double>(0.0, std::max(0.3, sqrt(abs(state_->null_goals[i]))) ));
+        base_null_eigen(j) = state_->null_goals[j];
+        if(base_null_eigen(j) != 0.0)
+        {
+            all_zeros = false;
+        }
     }
+    // Find the mean of the last null vector and the current gradient of the manipulability index
+    Eigen::Matrix<double,Eigen::Dynamic, Eigen::Dynamic> covariance = Eigen::Matrix<double,Eigen::Dynamic, Eigen::Dynamic>::Identity(state_->joint_positions.size(),state_->joint_positions.size());
+
+    // CALCULATION OF GRADIENT OF MANIPULABILITY INDEX
+    // Calculation of derivative source: https://arxiv.org/pdf/1908.02963.pdf (page 3, left column)
+    // Step 1: Calculate the manipulability index
+    state_->CalculateManipulability(robot_model_);
+    Eigen::Matrix<double,6,Eigen::Dynamic> jac_dot;
+    double k_gradient_weight = 25;
+    for(int j = 0; j < state_->joint_positions.size(); j++)
+    {
+        // Step 2: Find the partial derivative of the Jacobian with respect to the current joint
+        robot_model_->GetJacobianDot(state_->joint_positions, j, &jac_dot);
+        // Steps 3 & 4: Find the trace of partial derivative of Jacobian times pseudoinverse, then multiply answer from Step 3 by Step 1 to get gradient
+        target_null_eigen(j) = k_gradient_weight * state_->manipulability * ((jac_dot * state_->pseudo_inverse).trace());
+
+        if(all_zeros)
+        {
+            mean_null_eigen(j) = target_null_eigen(j);
+            covariance(j,j) = 0.1;
+        }
+        else
+        {
+            mean_null_eigen(j) = (base_null_eigen(j) + target_null_eigen(j)) / 2.0;
+            covariance(j,j) = pow(std::abs(base_null_eigen(j) - target_null_eigen(j)), 2) / 2.0;
+        }
+    }
+
+    normal_random_variable noise_sample { mean_null_eigen, covariance };
 
     //Generate number of children according to branching factor
     Eigen::VectorXd total_movement;
     for(int i = 0; i < tree_spec_->motion_candidate_branching_factor; i++)
     {
         Eigen::VectorXd null_movement_eigen(state_->joint_positions.size());
-        for(int j = 0; j < state_->joint_positions.size(); j++)
-        {
-            if(i == 0){
-                null_movement_eigen(j) = state_->null_goals[j];
-            } else {
-                null_movement_eigen(j) = state_->null_goals[j] + distributions[j](generator);
-            }
+        if(i == 0){
+            null_movement_eigen = base_null_eigen;
+        } else {
+            null_movement_eigen = noise_sample();
         }
+        
         total_movement = primary_movement + null_space_*null_movement_eigen;
 
         //Create new motion candidate
@@ -101,38 +154,19 @@ double MotionCandidateNode::CalculateReward()
         state_->position.p + KDL::Vector(desired_movement_[0], desired_movement_[1], desired_movement_[2]));
 
     double x, y, z, w;
-    bool verbose = false;
     state_->position.M.GetQuaternion(x, y, z, w);
-    if(verbose)
-    {
-        ROS_ERROR("Getting reward from motion candidate node at depth %d", node_depth_);
-        ROS_ERROR("Starting from pose: %.2f %.2f %.2f / %.2f %.2f %.2f %.2f", state_->position.p.x(), state_->position.p.y(), state_->position.p.z(), x, y, z, w);
-        ROS_ERROR("Starting from joint vels: %.2f %.2f %.2f %.2f %.2f %.2f %.2f", state_->joint_velocities[0], state_->joint_velocities[1], state_->joint_velocities[2], state_->joint_velocities[3], state_->joint_velocities[4], state_->joint_velocities[5], state_->joint_velocities[6]);
-        ROS_ERROR("Desired Velocity: %.2f %.2f %.2f %.2f %.2f %.2f", desired_velocity_raw_[0], desired_velocity_raw_[1], desired_velocity_raw_[2], desired_velocity_raw_[3], desired_velocity_raw_[4], desired_velocity_raw_[5]);
-    }
     ideal_position.M.GetQuaternion(x, y, z, w);
-    if(verbose)
-    {
-        ROS_ERROR("Ideal pose: %.2f %.2f %.2f / %.2f %.2f %.2f %.2f", ideal_position.p.x(), ideal_position.p.y(), ideal_position.p.z(), x, y, z, w);
-    }
-    double max_reward = reward_calc_->EvaluateMotionCandidate(robot_model_, state_, motion_candidates_[0], &ideal_position, verbose);
+    double max_reward = reward_calc_->EvaluateMotionCandidate(robot_model_, state_, motion_candidates_[0], &ideal_position);
     if(!is_leaf_){
         max_reward += children_[0]->GetReward();
-        if(verbose){
-            ROS_ERROR("Child reward: %.2f\nTotal reward:  %.2f", children_[0] ->GetReward(), max_reward);
-        }
     }
     best_candidate_index_ = 0;
     for(int i = 1; i < motion_candidates_.size(); i++)
     {
-        double new_reward = reward_calc_->EvaluateMotionCandidate(robot_model_, state_, motion_candidates_[i], &ideal_position, verbose);
+        double new_reward = reward_calc_->EvaluateMotionCandidate(robot_model_, state_, motion_candidates_[i], &ideal_position);
         if(!is_leaf_)
         {
             new_reward += children_[i]->GetReward();
-            if(verbose)
-            {
-                ROS_ERROR("Child reward: %.2f\nTotal reward:  %.2f", children_[i] ->GetReward(), new_reward);
-            }
         }
         if(new_reward > max_reward)
         {
@@ -165,8 +199,8 @@ void MotionCandidateNode::ChooseMotionCandidate(std::vector<double>* joint_veloc
 void MotionCandidateNode::GetBaseline(std::vector<double>* joint_velocities)
 {
     joint_velocities->clear();
-    GetPseudoInverse(pseudo_inverse_);
-    Eigen::VectorXd primary_movement = pseudo_inverse_ * desired_velocity_;
+    state_->CalculateJacobian(robot_model_);
+    Eigen::VectorXd primary_movement = state_->pseudo_inverse * desired_velocity_;
 
     for(int i = 0; i < primary_movement.size(); ++i)
     {
@@ -176,17 +210,10 @@ void MotionCandidateNode::GetBaseline(std::vector<double>* joint_velocities)
 
 //--------------------------------------------------------------------------------------------------
 // Linear algebra functions
-
-void MotionCandidateNode::GetPseudoInverse(Eigen::Matrix<double,Eigen::Dynamic,6>& pseudo_inverse)
+void MotionCandidateNode::GetNullSpace()
 {
-    Eigen::Matrix<double,Eigen::Dynamic,6> jacobian_transpose = state_->jacobian.transpose();
-    pseudo_inverse = jacobian_transpose * (state_->jacobian * jacobian_transpose).inverse();
-}
-
-void MotionCandidateNode::GetNullSpace(Eigen::Matrix<double,Eigen::Dynamic,6>& pseudo_inverse, Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic>& null_space)
-{
-    Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic> ident = Eigen::Matrix<double,Eigen::Dynamic, Eigen::Dynamic>::Identity(pseudo_inverse.rows(),state_->jacobian.cols());
-    null_space = ident - pseudo_inverse * state_->jacobian;
+    Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic> ident = Eigen::Matrix<double,Eigen::Dynamic, Eigen::Dynamic>::Identity(state_->pseudo_inverse.rows(),state_->jacobian.cols());
+    null_space_ = ident - state_->pseudo_inverse * state_->jacobian;
 }
 
 }

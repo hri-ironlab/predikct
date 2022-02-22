@@ -39,9 +39,11 @@ void RobotModel::Init()
     kdl_tree.getChain(root_link_, tip_link_, kdl_chain_);
 
     jac_solver_ = std::make_shared<KDL::ChainJntToJacSolver>(kdl_chain_);
+    jac_dot_solver_ = std::make_shared<KDL::ChainJntToJacDotSolver>(kdl_chain_);
     jnt_to_pos_solver_ = std::make_shared<KDL::ChainFkSolverPos_recursive>(kdl_chain_);
     jnt_pos_.resize(kdl_chain_.getNrOfJoints());
     jacobian_.resize(kdl_chain_.getNrOfJoints());
+    jacobian_dot_.resize(kdl_chain_.getNrOfJoints());
 
 
     double new_joint_limit;
@@ -80,6 +82,30 @@ void RobotModel::GetJacobian(std::vector<double> joint_positions, Eigen::Matrix<
         for(int j = 0; j < jacobian_.columns(); ++j)
         {
             (*jac)(i, j) = jacobian_(i, j);
+        }
+    }
+}
+
+void RobotModel::GetJacobianDot(std::vector<double> joint_positions, int joint_index, Eigen::Matrix<double,6,Eigen::Dynamic>* jac_dot_)
+{
+    KDL::JntArray joint_pos(joint_positions.size());
+    KDL::JntArray joint_vel(joint_positions.size());
+    for(int i = 0; i < joint_positions.size(); ++i) {
+        joint_pos(i) = joint_positions[i];
+        if(i == joint_index) {
+            joint_vel(i) = 1.0;
+        } else {
+            joint_vel(i) = 0.0;
+        }
+    }
+    KDL::JntArrayVel system_state(joint_pos, joint_vel);
+    jac_dot_solver_->JntToJacDot(system_state, jacobian_dot_);
+    jac_dot_->resize(jacobian_dot_.rows(), jacobian_dot_.columns());
+    for(int i = 0; i < jacobian_dot_.rows(); ++i)
+    {
+        for(int j = 0; j < jacobian_dot_.columns(); ++j)
+        {
+            (*jac_dot_)(i, j) = jacobian_dot_(i, j);
         }
     }
 }

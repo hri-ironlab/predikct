@@ -1,5 +1,5 @@
 /*
-Defines a base class for user models for use in Iron Lab's Predictive Velocity Controller.
+Defines a base class for user models for use in Iron Lab's PrediKCT Controller.
 Subclasses from this base class should implement specific types of probabilistic user models.
 
 Author: Connor Brooks

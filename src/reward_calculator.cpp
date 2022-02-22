@@ -60,17 +60,18 @@ double RewardCalculator::CalculateSmoothness(std::vector<double>* old_velocities
     return sqrt(sum_squared_diffs);
 }
 
-//Calculates the Yoshikawa manipulability measure for singularity avoidance/closeness to singularities
-double RewardCalculator::CalculateManipulability(boost::shared_ptr<MotionState> candidate_motion)
+//Retrieves the Yoshikawa manipulability measure for singularity avoidance/closeness to singularities
+double RewardCalculator::CalculateManipulability(RobotModel* robot_model, boost::shared_ptr<MotionState> candidate_motion)
 {
-    Eigen::MatrixXd pseudo_inverse = candidate_motion->jacobian * candidate_motion->jacobian.transpose();
-    return sqrt(pseudo_inverse.determinant());
+    candidate_motion->CalculateManipulability(robot_model);
+    return candidate_motion->manipulability;
 }
 
 //Returns the number of joints sufficiently close to their limit
 double RewardCalculator::CalculateLimitCloseness(RobotModel* robot_model, boost::shared_ptr<MotionState> candidate_motion)
 {
-    double limit_closeness = 0.5; //Fetch: 0.2
+    // TODO: Make this threshold a ros param
+    double limit_closeness = 0.25;
     double num_limit_joints = 0.0;
     for(int i = 0; i < candidate_motion->joint_positions.size(); ++i)
     {
@@ -91,7 +92,7 @@ double RewardCalculator::CalculateLimitCloseness(RobotModel* robot_model, boost:
 // 2, Motion smoothness
 // 3. Closeness to singularities
 // 4. Closeness to joint limits
-double RewardCalculator::EvaluateMotionCandidate(RobotModel* robot_model, boost::shared_ptr<MotionState> old_state, boost::shared_ptr<MotionState> candidate_motion, KDL::Frame* ideal_position, bool verbose)
+double RewardCalculator::EvaluateMotionCandidate(RobotModel* robot_model, boost::shared_ptr<MotionState> old_state, boost::shared_ptr<MotionState> candidate_motion, KDL::Frame* ideal_position)
 {
     candidate_motion->CalculatePosition(robot_model);
     candidate_motion->CalculateJacobian(robot_model);
@@ -99,13 +100,6 @@ double RewardCalculator::EvaluateMotionCandidate(RobotModel* robot_model, boost:
     // Calculate distance between resulting position and position from idealized movement
     double x, y, z, w;
     candidate_motion->position.M.GetQuaternion(x, y, z, w);
-
-    if(verbose)
-    {
-        ROS_ERROR("Motion Candidate resulting pose: %.2f %.2f %.2f %.2f %.2f %.2f %.2f", candidate_motion->position.p.x(), candidate_motion->position.p.y(), candidate_motion->position.p.z(), x, y, z, w);
-        ROS_ERROR("Motion Candidate commanded velocities: %.2f %.2f %.2f %.2f %.2f %.2f %.2f", candidate_motion->commanded_velocities[0], candidate_motion->commanded_velocities[1], candidate_motion->commanded_velocities[2], candidate_motion->commanded_velocities[3], candidate_motion->commanded_velocities[4], candidate_motion->commanded_velocities[5], candidate_motion->commanded_velocities[6]);
-        ROS_ERROR("Motion Candidate resulting velocities: %.2f %.2f %.2f %.2f %.2f %.2f %.2f", candidate_motion->joint_velocities[0], candidate_motion->joint_velocities[1], candidate_motion->joint_velocities[2], candidate_motion->joint_velocities[3], candidate_motion->joint_velocities[4], candidate_motion->joint_velocities[5], candidate_motion->joint_velocities[6]);
-    }
     
     double distance_estimate = CalculateDistance(&(candidate_motion->position), ideal_position, 1.0, 1.0);
 
@@ -113,21 +107,19 @@ double RewardCalculator::EvaluateMotionCandidate(RobotModel* robot_model, boost:
     double acceleration_size = CalculateSmoothness(&(old_state->joint_velocities), &(candidate_motion->commanded_velocities));
 
     // Estimate closeness to singularities
-    double manipulability = CalculateManipulability(candidate_motion);
+    double manipulability = CalculateManipulability(robot_model, candidate_motion);
 
     double num_limited_joints = CalculateLimitCloseness(robot_model, candidate_motion);
 
-    if(verbose)
-    {
-        ROS_ERROR("Distance Score: %.2f", distance_estimate);
-        ROS_ERROR("acceleration size: %.2f", acceleration_size);
-        ROS_ERROR("manipulability: %.2f", manipulability);
-        ROS_ERROR("individual weighted components: %.3f, %.3f, %.3f, %.3f", -10*distance_estimate, -1*acceleration_size, 500*manipulability, -1.0 * num_limited_joints);
-    }
+    return (dist_weight * distance_estimate) + (accel_weight * acceleration_size) + (manip_weight * manipulability) + (lim_weight * num_limited_joints);
+}
 
-    //Fetch: -25 -1 100 -2
-    //Panda: -150 -5 25 -7
-    return (-150 * distance_estimate) + (-5 * acceleration_size) + (25 * manipulability) + (-20.0 * num_limited_joints);
+void RewardCalculator::SetParameters(double distance_weight, double acceleration_weight, double manipulability_weight, double limits_weight)
+{
+    dist_weight = distance_weight;
+    accel_weight = acceleration_weight;
+    manip_weight = manipulability_weight;
+    lim_weight = limits_weight;
 }
 
 }
