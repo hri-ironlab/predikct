@@ -1,9 +1,0 @@
-{
-    "reference_link_name" : "panda_link0",
-    "target_link_name" : "panda_hand",
-    "velocity_command_topic" : "/teleop_commands",
-    "joint_command_topic" : "/panda_joint_commands",
-    "joint_state_topic" : "/joint_states",
-    "first_joint_name" : "panda_joint1",
-    "last_joint_name" : "panda_joint7"
-}

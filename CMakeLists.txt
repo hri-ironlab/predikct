@@ -138,8 +138,6 @@ add_library(${PROJECT_NAME}
   src/reward_calculator.cpp
   src/robot_model.cpp
   src/user_model.cpp
-  src/random_user_model.cpp
-  src/waypoint_user_model.cpp
   src/user_prediction_node.cpp
 )
 
@@ -153,7 +151,7 @@ target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${orocos_kdl_LIBRARIES
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-add_executable(predictive_controller_node src/controller.cpp)
+add_executable(predikct_fetch src/fetch_driver.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -164,7 +162,7 @@ add_executable(predictive_controller_node src/controller.cpp)
 ## Add cmake target dependencies of the executable
 ## same as for the library above
 ## Specify libraries to link a library or executable target against
-target_link_libraries(predictive_controller_node
+target_link_libraries(predikct_fetch
 	${catkin_LIBRARIES} ${orocos_kdl_LIBRARIES} ${EIGEN3_LIBRARIES} ${PROJECT_NAME}
 )
 
@@ -178,8 +176,7 @@ target_link_libraries(predictive_controller_node
 ## Mark executable scripts (Python etc.) for installation
 ## in contrast to setup.py, you can choose the destination
 catkin_install_python(PROGRAMS
-  scripts/fetch_reset.py
-  scripts/tester.py
+  scripts/recorder.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

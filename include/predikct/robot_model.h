@@ -19,6 +19,7 @@ Author: Connor Brooks
 #include <kdl/chainjnttojacsolver.hpp>
 #include <kdl/frames.hpp>
 #include <kdl/chainfksolverpos_recursive.hpp>
+#include <kdl/chainjnttojacdotsolver.hpp>
 
 namespace predikct
 {
@@ -35,6 +36,8 @@ public:
     int GetNumberOfJoints();
 
     void GetJacobian(std::vector<double> joint_positions, Eigen::Matrix<double,6,Eigen::Dynamic>* jac);
+
+    void GetJacobianDot(std::vector<double> joint_positions, int joint_index, Eigen::Matrix<double,6,Eigen::Dynamic>* jac_dot);
 
     void GetPosition(std::vector<double> joint_positions, KDL::Frame* position);
 
@@ -57,9 +60,11 @@ private:
 
     KDL::Chain kdl_chain_;
     std::shared_ptr<KDL::ChainJntToJacSolver> jac_solver_;
+    std::shared_ptr<KDL::ChainJntToJacDotSolver> jac_dot_solver_;
     std::shared_ptr<KDL::ChainFkSolverPos_recursive> jnt_to_pos_solver_;
     KDL::JntArray jnt_pos_;
     KDL::Jacobian jacobian_;
+    KDL::Jacobian jacobian_dot_;
     std::vector<double> jnt_pos_up_limits_;
     std::vector<double> jnt_pos_down_limits_;
     std::vector<double> jnt_vel_limits_;
@@ -67,4 +72,4 @@ private:
 
 }
 
-#endif  // PREDIKCT_ROBOT_MODEL_H
+#endif  // PREDICTIVE_VELOCITY_CONTROLLER_ROBOT_MODEL_H

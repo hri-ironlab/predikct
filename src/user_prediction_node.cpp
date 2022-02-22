@@ -77,13 +77,8 @@ std::vector<boost::shared_ptr<TreeNode>> UserPredictionNode::GenerateChildren()
     //Generate number of children according to branching factor
     user_model_->SampleNoReplacement(robot_model_, state_, &current_velocity_, &velocity_primitives_, tree_spec_->time_window,
         tree_spec_->user_prediction_branching_factor, &sampled_primitives_, &sampled_probabilities_);
-    bool verbose = false;
     for(int i = 0; i < tree_spec_->user_prediction_branching_factor; i++)
     {
-        if(verbose)
-        {
-            ROS_ERROR("Child %d with prob %.2f velocity command: %.2f %.2f %.2f %.2f %.2f %.2f", i, sampled_probabilities_[i], sampled_primitives_[i][0], sampled_primitives_[i][1], sampled_primitives_[i][2], sampled_primitives_[i][3], sampled_primitives_[i][4], sampled_primitives_[i][5]);
-        }
         children_.push_back(boost::shared_ptr<TreeNode>( new MotionCandidateNode(this, robot_model_, state_, 
             node_depth_+1, tree_spec_, reward_calc_, user_model_, &(sampled_primitives_[i]))));
     }
@@ -100,19 +95,10 @@ double UserPredictionNode::CalculateReward()
     }
 
     double reward = 0.0;
-    bool verbose = false;
-    if(verbose)
-    {
-        ROS_ERROR("Getting reward from user prediction node at depth %d", node_depth_);
-    }
     //Sum over all children nodes
     for(int i = 0; i < sampled_primitives_.size(); i++)
     {
         double primitive_score = sampled_probabilities_[i] * children_[i]->GetReward();
-        if(verbose)
-        {
-            ROS_ERROR("Child %d probability: %.2f, Child %d reward: %.2f, Total Child %d contributed reward: %.2f", i, sampled_probabilities_[i], i, children_[i]->GetReward(), i, primitive_score);
-        }
         reward += primitive_score;
     }
 

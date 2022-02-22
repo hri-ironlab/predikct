@@ -20,20 +20,25 @@ from franka_core_msgs.msg import JointCommand
 
 
 ROBOT_TYPE = 0 #0 for Fetch, 1 for Panda
-
+baseline = False
+base_folder_name = "fetch_null_testing"
 
 rospack = rospkg.RosPack()
 if(ROBOT_TYPE == 0):
-    base_test_file = rospack.get_path("predictive_velocity_controller") + "/test_scripts/fetch_"
+    rewards_params = [-50, -2, 500, -2]
+    if(baseline):
+        tree_params = [(1, 1, 1), 0.2, 1.0]
+    else:
+        tree_params = [(2,80,2), 0.2, 0.95]
+    base_test_file = rospack.get_path("predikct") + "/test_scripts/fetch_"
 else:
-    base_test_file = rospack.get_path("predictive_velocity_controller") + "/test_scripts/panda_"
-test_trajectories =  ["aamas", "diamond", "pickplace"]
-#For waypoint controllers:
-#tree_sizes = [([3,2,4], "tree4"), ([100,1,1], "tree1"), ([4,4,3], "tree3")]
-#For line and random controllers:
-tree_sizes = [([14,6,2], "tree2")]
-#For baseline:
-#tree_sizes = [([1,1,1], "baseline")]
+    rewards_params = [-20, -1.5, 50, -4]
+    if(baseline):
+        tree_params = [(1, 1, 1), 0.2, 1.0]
+    else:
+        tree_params = [(2, 3, 4), 1.0, 0.5]
+    base_test_file = rospack.get_path("predikct") + "/test_scripts/panda_"
+test_trajectories =  ["tuning_cube"]
 
 loop_rate = 5
 ideal_path = []
@@ -339,61 +344,79 @@ def main():
     test_runner = TestRunner(json_test_spec, tf2_buffer)
     rate = rospy.Rate(loop_rate)
 
+    # Publish initial reward spec
+    reward_command_spec = "update_rewards/"
+    for param in rewards_params:
+        if(hasattr(param, '__iter__')):
+            for p in param:
+                reward_command_spec += str(p) + "/"
+        else:
+            reward_command_spec += str(param) + "/"
+    test_runner.request_info_publisher.publish(String(reward_command_spec))
+    rospy.sleep(2)
+    # Publish initial tree spec
+    tree_command_spec = "update_tree/"
+    for param in tree_params:
+        if(hasattr(param, '__iter__')):
+            for p in param:
+                tree_command_spec += str(p) + "/"
+        else:
+            tree_command_spec += str(param) + "/"
+    test_runner.request_info_publisher.publish(String(tree_command_spec))
+    rospy.sleep(2)
+
     overall_linears = []
     overall_angulars = []
     overall_linear_waypoints = []
     overall_angular_waypoints = []
-    for tree_size in tree_sizes:
-        if not os.path.exists(tree_size[1]):
-            os.makedirs(tree_size[1])
-        tree_command_spec = "update_tree/" + str(tree_size[0][0]) + "/" + str(tree_size[0][1]) + "/" + str(tree_size[0][2]) + "/"
-        test_runner.request_info_publisher.publish(String(tree_command_spec))
-        rospy.sleep(1)
-        test_runner.request_info_publisher.publish(String("request_info/"))
-        rospy.sleep(1)
-        for test_type in test_trajectories:
-            json_waypoints = None
-            with open(base_test_file + test_type + ".json") as waypoint_spec:
-                json_waypoints = json.loads(waypoint_spec.read())
-            test_runner.setup_waypoints(json_waypoints)
-            for i in range(num_test_iterations):
-                reset_data_recorders()
-                test_runner.request_info_publisher.publish(String("new_task/"))
-                rospy.sleep(1)
-                test_runner.start_trajectory()
-                current_time = 0.0
-                while(test_runner.trajectory_active and not rospy.is_shutdown()):
-                    test_runner.process_trajectory(current_time)
-                    rate.sleep()
-                    current_time += 1.0 / loop_rate
-                
-                rospy.sleep(1)
+    
+    if not os.path.exists(base_folder_name):
+        os.makedirs(base_folder_name)
+    test_runner.request_info_publisher.publish(String("request_info/"))
+    rospy.sleep(1)
+    for test_type in test_trajectories:
+        json_waypoints = None
+        with open(base_test_file + test_type + ".json") as waypoint_spec:
+            json_waypoints = json.loads(waypoint_spec.read())
+        test_runner.setup_waypoints(json_waypoints)
+        for i in range(num_test_iterations):
+            reset_data_recorders()
+            test_runner.request_info_publisher.publish(String("new_task/"))
+            rospy.sleep(1)
+            test_runner.start_trajectory()
+            current_time = 0.0
+            while(test_runner.trajectory_active and not rospy.is_shutdown()):
+                test_runner.process_trajectory(current_time)
+                rate.sleep()
+                current_time += 1.0 / loop_rate
+            
+            rospy.sleep(1)
 
-                overall_linears.append(sum(linear_errors))
-                overall_angulars.append(sum(angular_errors))
-                overall_linear_waypoints.append(sum([pair[0] for pair in waypoint_errors]))
-                overall_angular_waypoints.append(sum([pair[1] for pair in waypoint_errors]))
-                print("Results summary:")
-                print("Linear Error Sum: " + str(overall_linears[-1]))
-                print("Angular Error Sum: " + str(overall_angulars[-1]))
-                print("Linear Waypoint Errors: " + str(overall_linear_waypoints[-1]))
-                print("Angular Waypoint Errors: " + str(overall_angular_waypoints[-1]))
-                result_object = {}
-                result_object["controller_spec"] = controller_info_string
-                result_object["ideal_path"] = ideal_path
-                result_object["actual_path"] = actual_path
-                result_object["linear_errors"] = linear_errors
-                result_object["angular_errors"] = angular_errors
-                result_object["velocity_commands"] = velocity_commands
-                result_object["joint_commands"] = joint_commands
-                result_object["joint_positions"] = joint_positions
-                result_object["waypoint_errors"] = waypoint_errors
-                with open(tree_size[1] + "/" + test_type + "_" + str(i) + ".txt", "w") as result_file:
-                    result_file.write(json.dumps(result_object))
-                    result_file.close()
-                
-                resetter.reset()
-                rospy.sleep(5)
+            overall_linears.append(sum(linear_errors))
+            overall_angulars.append(sum(angular_errors))
+            overall_linear_waypoints.append(sum([pair[0] for pair in waypoint_errors]))
+            overall_angular_waypoints.append(sum([pair[1] for pair in waypoint_errors]))
+            print("Results summary:")
+            print("Linear Error Sum: " + str(overall_linears[-1]))
+            print("Angular Error Sum: " + str(overall_angulars[-1]))
+            print("Linear Waypoint Errors: " + str(overall_linear_waypoints[-1]))
+            print("Angular Waypoint Errors: " + str(overall_angular_waypoints[-1]))
+            result_object = {}
+            result_object["controller_spec"] = controller_info_string
+            result_object["ideal_path"] = ideal_path
+            result_object["actual_path"] = actual_path
+            result_object["linear_errors"] = linear_errors
+            result_object["angular_errors"] = angular_errors
+            result_object["velocity_commands"] = velocity_commands
+            result_object["joint_commands"] = joint_commands
+            result_object["joint_positions"] = joint_positions
+            result_object["waypoint_errors"] = waypoint_errors
+            with open(base_folder_name + "/" + test_type + "_" + str(i) + ".txt", "w") as result_file:
+                result_file.write(json.dumps(result_object))
+                result_file.close()
+            
+            resetter.reset()
+            rospy.sleep(5)
 
 def reset_data_recorders():
     global ideal_path

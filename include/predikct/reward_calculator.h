@@ -1,5 +1,5 @@
 /*
-Defines a base class for reward calculators for use in Iron Lab's Predictive Velocity Controller.
+Defines a base class for reward calculators for use in Iron Lab's PrediKCT controller.
 Subclasses from this base class should implement specific types of reward calculations.
 
 Author: Connor Brooks
@@ -26,7 +26,10 @@ class RewardCalculator
 public:
     RewardCalculator()
     {
-        
+        dist_weight = -1.0;
+        accel_weight = -1.0;
+        manip_weight = 1.0;
+        lim_weight = -1.0;
     }
     ~RewardCalculator()
     {}
@@ -39,15 +42,28 @@ public:
 
     static double CalculateSmoothness(std::vector<double>* old_velocities, std::vector<double>* new_velocities);
 
-    static double CalculateManipulability(boost::shared_ptr<MotionState> candidate_motion);
+    static double CalculateManipulability(RobotModel* robot_model, boost::shared_ptr<MotionState> candidate_motion);
 
     static double CalculateLimitCloseness(RobotModel* robot_model, boost::shared_ptr<MotionState> candidate_motion);
 
-    double EvaluateMotionCandidate(RobotModel* robot_model, boost::shared_ptr<MotionState> old_state, boost::shared_ptr<MotionState> candidate_motion, KDL::Frame* ideal_position, bool verbose);
+    double EvaluateMotionCandidate(RobotModel* robot_model, boost::shared_ptr<MotionState> old_state, boost::shared_ptr<MotionState> candidate_motion, KDL::Frame* ideal_position);
 
     double GetDistance(KDL::Frame* frame_1, KDL::Frame* frame_2);
+
+    void SetParameters(double distance_weight, double acceleration_weight, double manipulability_weight, double limits_weight);
+
+    double GetDistWeight(){ return dist_weight; }
+    double GetAccelWeight(){ return accel_weight; }
+    double GetManipWeight(){ return manip_weight; }
+    double GetLimWeight(){ return lim_weight; }
+
+private:
+    double dist_weight;
+    double accel_weight;
+    double manip_weight;
+    double lim_weight;
 };
 
 }
 
-#endif  // PREDIKCT_REWARD_CALCULATOR_H
+#endif  // PREDICTIVE_VELOCITY_CONTROLLER_REWARD_CALCULATOR_H
