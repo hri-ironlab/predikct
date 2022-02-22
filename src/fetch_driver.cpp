@@ -31,12 +31,13 @@ public:
         tree_spec.tree_depth = 2;
         tree_spec.user_prediction_branching_factor = 16;
         tree_spec.velocity_primitive_set_size = 4 * tree_spec.user_prediction_branching_factor;
-        double dist_weight = -25;
-        double accel_weight = -2;
-        double manip_weight = 250;
+        double dist_weight = -50;
+        double accel_weight = -1;
+        double manip_weight = 500;
         double lim_weight = -2;
         reward.SetParameters(dist_weight, accel_weight, manip_weight, lim_weight);
 
+        current_fetch_command_msg = new sensor_msgs::JointState();
         last_velocity_command = std::vector<double>(7, 0);
         last_joint_positions = std::vector<double>(7, 0);
         last_joint_velocities = std::vector<double>(7, 0);
@@ -44,11 +45,12 @@ public:
         current_fetch_command_msg->velocity = std::vector<double>(last_joint_velocities.size(), 0);
         last_joint_msg_time = 0;
         avg_search_time = 0;
-        search_time_window = std::vector<double>(10);
+        search_time_window = std::vector<double>(10, 0);
         oldest_search_time = 0;
         command_timeout_time = 0.25;
         last_received_command_time = 0;
         ReadParams();
+        active = false;
     }
 
     ~Controller()
@@ -132,6 +134,7 @@ public:
         }
         if(all_zeros || (ros::Time::now().toSec() - last_received_command_time) > command_timeout_time)
         {
+            active = false;
             PublishStop();
             return;
         }
@@ -146,8 +149,9 @@ public:
         last_velocity_command = std::vector<double>(6, 0);
         tree_root.ChooseMotionCandidate(&(current_fetch_command_msg->velocity), &(last_null_vector));
         double tree_time = ros::Time::now().toSec() - tree_start;
-        avg_search_time = avg_search_time - (search_time_window[oldest_search_time++] / search_time_window.size()) + (tree_time / search_time_window.size());
-        if(oldest_search_time >= search_time_window.size())
+        avg_search_time = (avg_search_time*search_time_window.size() + tree_time - search_time_window[oldest_search_time]) / search_time_window.size();
+        search_time_window[oldest_search_time] = tree_time;
+        if(++oldest_search_time >= search_time_window.size())
         {
             oldest_search_time = 0;
         }
@@ -204,9 +208,11 @@ int main(int argc, char *argv[])
 
     Controller controller(nh);
     ros::Duration(1.0).sleep();
+    ros::Rate update_loop_rate(100);
     while(ros::ok())
     {
         ros::spinOnce();
         controller.GetNewCommand();
+        update_loop_rate.sleep();
     }
 }
