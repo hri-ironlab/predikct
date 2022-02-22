@@ -13,16 +13,16 @@
 #include "predikct/motion_state.h"
 #include "predikct/motion_candidate_node.h"
 
-class Controller
+class BaselineController
 {
 public:
-    Controller(ros::NodeHandle& nh)
+    BaselineController(ros::NodeHandle& nh)
     {
         // Define Subs & Pubs to receive current joint states and task space motion requests and publish joint velocity commands
-        joint_sub = nh.subscribe<sensor_msgs::JointState>("joint_states", 1, boost::bind(&Controller::JointUpdateCallback, this, _1));
-        vel_command_sub = nh.subscribe<geometry_msgs::Twist>("teleop_commands", 1, boost::bind(&Controller::VelocityCommandCallback, this, _1));
+        joint_sub = nh.subscribe<sensor_msgs::JointState>("joint_states", 1, boost::bind(&BaselineController::JointUpdateCallback, this, _1));
+        vel_command_sub = nh.subscribe<geometry_msgs::Twist>("teleop_commands", 1, boost::bind(&BaselineController::VelocityCommandCallback, this, _1));
         command_pub = nh.advertise<sensor_msgs::JointState>("joint_commands", 1);
-        record_pub = nh.advertise<std_msgs::String>("predikct", 1);
+        record_pub = nh.advertise<std_msgs::String>("predikct", 100);
 
         // Set tree parameters. These can be defined as needed but should be tuned for your use case
         // Larger trees will typically provide smoother movement for a given time interval, but will require that time interval to be larger
@@ -57,7 +57,7 @@ public:
         active = false;
     }
 
-    ~Controller()
+    ~BaselineController()
     {}
 
     void ReadParams()
@@ -153,7 +153,7 @@ public:
         double tree_start = ros::Time::now().toSec();
         predikct::MotionCandidateNode tree_root(nullptr, &robot, current_state, 1, &tree_spec, 
         &reward, user, &last_velocity_command);
-        tree_root.ChooseMotionCandidate(&(current_fetch_command_msg->velocity), &(last_null_vector));
+        tree_root.GetBaseline(&(current_fetch_command_msg->velocity));
         double tree_time = ros::Time::now().toSec() - tree_start;
         avg_search_time = (avg_search_time*search_time_window.size() + tree_time - search_time_window[oldest_search_time]) / search_time_window.size();
         search_time_window[oldest_search_time] = tree_time;
@@ -163,7 +163,7 @@ public:
         }
 
         stream << "\"joint_velocity_command\" : [" << current_fetch_command_msg->velocity[0] << "," << current_fetch_command_msg->velocity[1] << "," << current_fetch_command_msg->velocity[2] << "," << current_fetch_command_msg->velocity[3] << "," << current_fetch_command_msg->velocity[4] << "," << current_fetch_command_msg->velocity[5] << "," << current_fetch_command_msg->velocity[6] <<"],";
-        stream << "\"null_vector\" : [" << last_null_vector[0] << "," << last_null_vector[1] << "," << last_null_vector[2] << "," << last_null_vector[3] << "," << last_null_vector[4] << "," << last_null_vector[5] << "," << last_null_vector[6] <<"]}";
+        stream << "\"null_vector\" : [" << 0.0 << "," << 0.0 << "," << 0.0 << "," << 0.0 << "," << 0.0 << "," << 0.0 << "," << 0.0 <<"]}";
         current_recorder_msg->data = stream.str();
         active = false;
         PublishCommand();
@@ -218,12 +218,12 @@ private:
 
 int main(int argc, char *argv[])
 {
-    ros::init(argc, argv, "KCT_Controller");
+    ros::init(argc, argv, "KCT_Controller_Baseline");
 
     ros::NodeHandle nh;
     ros::Duration(1.0).sleep();
 
-    Controller controller(nh);
+    BaselineController controller(nh);
     ros::Duration(1.0).sleep();
     ros::Rate update_loop_rate(100);
     while(ros::ok())

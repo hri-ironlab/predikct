@@ -152,6 +152,7 @@ target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${orocos_kdl_LIBRARIES
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(predikct_fetch src/fetch_driver.cpp)
+add_executable(predikct_fetch_baseline src/fetch_baseline.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -163,6 +164,9 @@ add_executable(predikct_fetch src/fetch_driver.cpp)
 ## same as for the library above
 ## Specify libraries to link a library or executable target against
 target_link_libraries(predikct_fetch
+	${catkin_LIBRARIES} ${orocos_kdl_LIBRARIES} ${EIGEN3_LIBRARIES} ${PROJECT_NAME}
+)
+target_link_libraries(predikct_fetch_baseline
 	${catkin_LIBRARIES} ${orocos_kdl_LIBRARIES} ${EIGEN3_LIBRARIES} ${PROJECT_NAME}
 )
 
