@@ -35,10 +35,10 @@ if __name__ == '__main__':
                    "elbow_flex_joint", "forearm_roll_joint",
                    "wrist_flex_joint", "wrist_roll_joint"]
     # Lists of joint angles in the same order as in joint_names
-    reset_pose = [0.2, -0.6, 0.0, 0.8, 0.0, -0.3, 0.0]
+    reset_pose = [0.1, 0.0, -0.8, 0.0, 1.2, 0.0, -0.4, 0.0]
 
     # Plans the joints in joint_names to angles in pose
-    move_group.moveToJointPosition(joint_names, pose, wait=False)
+    move_group.moveToJointPosition(joint_names, reset_pose, wait=False)
 
     # Since we passed in wait=False above we need to wait here
     move_group.get_move_action().wait_for_result()
