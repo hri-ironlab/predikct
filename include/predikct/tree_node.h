@@ -48,8 +48,8 @@ public:
 class TreeNode
 {
 public:
-    TreeNode(TreeNode* parent, RobotModel* robot_model, boost::shared_ptr<MotionState> state, 
-        int tree_depth, TreeSpec* tree_spec, RewardCalculator* reward_calculator, UserModel* user_model)
+    TreeNode(boost::weak_ptr<TreeNode> parent, boost::shared_ptr<RobotModel> robot_model, boost::shared_ptr<MotionState> state, 
+        int tree_depth, boost::shared_ptr<TreeSpec> tree_spec, boost::shared_ptr<RewardCalculator> reward_calculator, boost::shared_ptr<UserModel> user_model, bool verbose)
     {
         this->parent_ = parent;
         iteration_active_ = false;
@@ -61,6 +61,7 @@ public:
         tree_spec_ = tree_spec;
         reward_calc_ = reward_calculator;
         user_model_ = user_model;
+        verbose_ = verbose;
 
         is_leaf_ = node_depth_ == tree_spec_->tree_depth;
     }
@@ -70,7 +71,7 @@ public:
     virtual std::vector<boost::shared_ptr<TreeNode>> GenerateChildren() = 0;
     virtual double CalculateReward() = 0;
 
-    TreeNode* GetParent()
+    boost::weak_ptr<TreeNode> GetParent()
     {
         return parent_;
     }
@@ -109,7 +110,7 @@ public:
     }
 
 protected:
-    TreeNode* parent_;
+    boost::weak_ptr<TreeNode> parent_;
     std::vector<boost::shared_ptr<TreeNode>> children_;
     bool iteration_active_;
 
@@ -120,15 +121,16 @@ protected:
     bool is_leaf_;
 
     boost::shared_ptr<MotionState> state_;
-    RobotModel* robot_model_;
+    boost::shared_ptr<RobotModel> robot_model_;
 
-    TreeSpec* tree_spec_;
-    RewardCalculator* reward_calc_;
-    UserModel* user_model_;
+    boost::shared_ptr<TreeSpec> tree_spec_;
+    boost::shared_ptr<RewardCalculator> reward_calc_;
+    boost::shared_ptr<UserModel> user_model_;
+    bool verbose_;
 
     std::vector<boost::shared_ptr<TreeNode>>::iterator child_iterator_;
 };
 
 }
 
-#endif  // PREDICTIVE_VELOCITY_CONTROLLER_TREE_NODE_H
+#endif  // PREDIKCT_TREE_NODE_H

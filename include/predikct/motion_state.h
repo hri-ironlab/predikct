@@ -33,11 +33,11 @@ public:
     }
 
     // Constructor takes in a pointer to the starting joint positions, a set of old and new joint velocities and a timestamp over which to spin up toward and apply the new joint velocities
-    MotionState(std::vector<double>* starting_joint_positions, std::vector<double>* last_joint_velocities, std::vector<double>* given_joint_velocities, std::vector<double>* null_vector, double motion_time, RobotModel* robot_model, double time_into_future)
+    MotionState(std::vector<double>* starting_joint_positions, std::vector<double>* last_joint_velocities, std::vector<double>* given_joint_velocities, std::vector<double>* null_vector, double motion_time, boost::shared_ptr<RobotModel> robot_model, double time_into_future)
     {
         double timestamp, time_increment, max_acceleration, current_velocity, current_position, target_velocity;
         time_increment = 0.01;
-        max_acceleration = 0.075;
+        max_acceleration = 0.25; //Fetch: 0.075
         time_in_future = time_into_future;
         for(int j = 0; j < (*starting_joint_positions).size(); j++)
         {
@@ -82,7 +82,7 @@ public:
     ~MotionState()
     {}
 
-    void CalculateJacobian(RobotModel* robot_model)
+    void CalculateJacobian(boost::shared_ptr<RobotModel> robot_model)
     {
         if(is_jacobian_calculated)
         {
@@ -94,7 +94,7 @@ public:
         is_jacobian_calculated = true;
     }
 
-    void CalculatePosition(RobotModel* robot_model)
+    void CalculatePosition(boost::shared_ptr<RobotModel> robot_model)
     {
         if(is_position_calculated)
         {
@@ -104,7 +104,7 @@ public:
         is_position_calculated = true;
     }
 
-    void CalculateManipulability(RobotModel* robot_model)
+    void CalculateManipulability(boost::shared_ptr<RobotModel> robot_model)
     {
         if(is_manipulability_calculated)
         {

@@ -11,15 +11,21 @@ namespace predikct
 // forward declares
 class MotionCandidateNode;
 
-UserPredictionNode::UserPredictionNode(TreeNode* parent, RobotModel* robot_model, boost::shared_ptr<MotionState> state, int tree_depth, TreeSpec* tree_spec, RewardCalculator* reward_calculator, 
-    UserModel* user_model, std::vector<double>* current_velocity) 
-    : TreeNode(parent, robot_model, state, tree_depth, tree_spec, reward_calculator, user_model)
+UserPredictionNode::UserPredictionNode(boost::weak_ptr<TreeNode> parent, boost::shared_ptr<RobotModel> robot_model,
+    boost::shared_ptr<MotionState> state, int tree_depth, boost::shared_ptr<TreeSpec> tree_spec,
+    boost::shared_ptr<RewardCalculator> reward_calculator, boost::shared_ptr<UserModel> user_model,
+    std::vector<double>* current_velocity, bool verbose)
+    : TreeNode(parent, robot_model, state, tree_depth, tree_spec, reward_calculator, user_model, verbose)
 {
     children_generated_ = false;
     current_velocity_.clear();
     for(int i = 0; i < current_velocity->size(); ++i)
     {
         current_velocity_.push_back((*current_velocity)[i]);
+    }
+    if (verbose_)
+    {
+        ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Debug);
     }
 }
 
@@ -79,8 +85,12 @@ std::vector<boost::shared_ptr<TreeNode>> UserPredictionNode::GenerateChildren()
         tree_spec_->user_prediction_branching_factor, &sampled_primitives_, &sampled_probabilities_);
     for(int i = 0; i < tree_spec_->user_prediction_branching_factor; i++)
     {
-        children_.push_back(boost::shared_ptr<TreeNode>( new MotionCandidateNode(this, robot_model_, state_, 
-            node_depth_+1, tree_spec_, reward_calc_, user_model_, &(sampled_primitives_[i]))));
+        if(verbose_)
+        {
+            ROS_DEBUG("Child %d with prob %.2f velocity command: %.2f %.2f %.2f %.2f %.2f %.2f", i, sampled_probabilities_[i], sampled_primitives_[i][0], sampled_primitives_[i][1], sampled_primitives_[i][2], sampled_primitives_[i][3], sampled_primitives_[i][4], sampled_primitives_[i][5]);
+        }
+        children_.push_back(boost::shared_ptr<TreeNode>( new MotionCandidateNode(shared_from_this(), robot_model_, state_, 
+            node_depth_+1, tree_spec_, reward_calc_, user_model_, &(sampled_primitives_[i]), verbose_)));
     }
 
     children_generated_ = true;
@@ -95,10 +105,18 @@ double UserPredictionNode::CalculateReward()
     }
 
     double reward = 0.0;
+    if(verbose_)
+    {
+        ROS_DEBUG("Getting reward from user prediction node at depth %d", node_depth_);
+    }
     //Sum over all children nodes
     for(int i = 0; i < sampled_primitives_.size(); i++)
     {
         double primitive_score = sampled_probabilities_[i] * children_[i]->GetReward();
+        if(verbose_)
+        {
+            ROS_DEBUG("Child %d probability: %.2f, Child %d reward: %.2f, Total Child %d contributed reward: %.2f", i, sampled_probabilities_[i], i, children_[i]->GetReward(), i, primitive_score);
+        }
         reward += primitive_score;
     }
 

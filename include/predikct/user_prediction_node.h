@@ -11,15 +11,16 @@ Author: Connor Brooks
 // includes
 #include "predikct/tree_node.h"
 #include <boost/shared_ptr.hpp>
+#include <boost/enable_shared_from_this.hpp>
 
 namespace predikct
 {
 
-class UserPredictionNode : public TreeNode
+class UserPredictionNode : public TreeNode, public boost::enable_shared_from_this<UserPredictionNode>
 {
 public:
-    UserPredictionNode(TreeNode* parent, RobotModel* robot_model, boost::shared_ptr<MotionState> state, int tree_depth, TreeSpec* tree_spec, 
-        RewardCalculator* reward_calculator, UserModel* user_model, std::vector<double>* current_velocity);
+    UserPredictionNode(boost::weak_ptr<TreeNode> parent, boost::shared_ptr<RobotModel> robot_model, boost::shared_ptr<MotionState> state, int tree_depth, boost::shared_ptr<TreeSpec> tree_spec, 
+        boost::shared_ptr<RewardCalculator> reward_calculator, boost::shared_ptr<UserModel> user_model, std::vector<double>* current_velocity, bool verbose);
     ~UserPredictionNode()
     {}
 

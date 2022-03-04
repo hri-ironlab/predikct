@@ -13,15 +13,16 @@ Author: Connor Brooks
 
 #include <Eigen/Core>
 #include <boost/shared_ptr.hpp>
+#include <boost/enable_shared_from_this.hpp>
 
 namespace predikct
 {
 
-class MotionCandidateNode : public TreeNode
+class MotionCandidateNode : public TreeNode, public boost::enable_shared_from_this<MotionCandidateNode>
 {
 public:
-    MotionCandidateNode(TreeNode* parent, RobotModel* robot_model, boost::shared_ptr<MotionState> state, int tree_depth, TreeSpec* tree_spec, 
-        RewardCalculator* reward_calculator, UserModel* user_model, std::vector<double>* desired_velocity);
+    MotionCandidateNode(boost::weak_ptr<TreeNode> parent, boost::shared_ptr<RobotModel> robot_model, boost::shared_ptr<MotionState> state, int tree_depth, boost::shared_ptr<TreeSpec> tree_spec, 
+        boost::shared_ptr<RewardCalculator> reward_calculator, boost::shared_ptr<UserModel> user_model, std::vector<double>* desired_velocity, bool verbose);
     ~MotionCandidateNode()
     {}
     std::vector<boost::shared_ptr<TreeNode>> GenerateChildren();

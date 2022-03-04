@@ -1,5 +1,5 @@
 /*
-Defines a base class for reward calculators for use in Iron Lab's PrediKCT controller.
+Defines a base class for reward calculators for use in Iron Lab's Predictive Velocity Controller.
 Subclasses from this base class should implement specific types of reward calculations.
 
 Author: Connor Brooks
@@ -42,11 +42,11 @@ public:
 
     static double CalculateSmoothness(std::vector<double>* old_velocities, std::vector<double>* new_velocities);
 
-    static double CalculateManipulability(RobotModel* robot_model, boost::shared_ptr<MotionState> candidate_motion);
+    static double CalculateManipulability(boost::shared_ptr<RobotModel> robot_model, boost::shared_ptr<MotionState> candidate_motion);
 
-    static double CalculateLimitCloseness(RobotModel* robot_model, boost::shared_ptr<MotionState> candidate_motion);
+    static double CalculateLimitCloseness(boost::shared_ptr<RobotModel> robot_model, boost::shared_ptr<MotionState> candidate_motion);
 
-    double EvaluateMotionCandidate(RobotModel* robot_model, boost::shared_ptr<MotionState> old_state, boost::shared_ptr<MotionState> candidate_motion, KDL::Frame* ideal_position);
+    double EvaluateMotionCandidate(boost::shared_ptr<RobotModel> robot_model, boost::shared_ptr<MotionState> old_state, boost::shared_ptr<MotionState> candidate_motion, KDL::Frame* ideal_position, bool verbose);
 
     double GetDistance(KDL::Frame* frame_1, KDL::Frame* frame_2);
 
@@ -66,4 +66,4 @@ private:
 
 }
 
-#endif  // PREDICTIVE_VELOCITY_CONTROLLER_REWARD_CALCULATOR_H
+#endif  // PREDIKCT_REWARD_CALCULATOR_H

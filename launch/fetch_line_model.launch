@@ -1,5 +1,5 @@
 <launch>
-    <param name="/use_simulated_time" type="bool" value="false" />
+    <param name="/use_simulated_time" type="bool" value="true" />
     <node pkg="predikct" name="KCT_Controller" type="predikct_fetch" output="screen">
         <param name="/planning_root_link" type="string" value="torso_lift_link" />
         <param name="/planning_tip_link" type="string" value="wrist_roll_link" />
@@ -32,6 +32,19 @@
         <param name="/joint6_pos_up_limit" type="double" value="$(eval float('inf'))" />
         <param name="/joint6_pos_down_limit" type="double" value="$(eval float('inf'))" />
         <param name="/joint6_vel_limit" type="double" value="2.26" />
+        <param name="/user_model" type="int" value="0" />
+        <param name="/tree_spec/depth" type="int" value="4" />
+        <param name="/tree_spec/motion_candidate_branching_factor" type="int" value="3" />
+        <param name="/tree_spec/user_prediction_branching_factor" type="int" value="2" />
+        <param name="/tree_spec/velocity_primitive_set_size" type="int" value="30" />
+        <param name="/tree_spec/time_window" type="double" value="0.7" />
+        <param name="/tree_spec/temporal_discount" type="double" value="0.9" />
+        <param name="/reward_params/distance" type="double" value="-50.0" />
+        <param name="/reward_params/acceleration" type="double" value="-1.0" />
+        <param name="/reward_params/manipulability" type="double" value="500.0" />
+        <param name="/reward_params/limits" type="double" value="-2.0" />
+        <param name="/verbose" type="bool" value="false" />
+        <param name="/robot_type" type="int" value="0" />
         <remap from ="/planning_robot_urdf" to="/robot_description" />
         <remap from ="/joint_commands" to="/arm_controller/joint_velocity/joint_commands" />
     </node>
