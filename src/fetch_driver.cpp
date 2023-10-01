@@ -1,11 +1,13 @@
 #include <ros/ros.h>
 #include <vector>
 #include <boost/format.hpp>
+#include <boost/pointer_cast.hpp>
 #include <geometry_msgs/Twist.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <string>
 #include <std_msgs/String.h>
 #include <sensor_msgs/JointState.h>
+#include "predikct/tree_node.h"
 #include "predikct/robot_model.h"
 #include "predikct/user_model.h"
 #include "predikct/reward_calculator.h"
@@ -15,29 +17,14 @@
 class Controller
 {
 public:
-    Controller(ros::NodeHandle& nh)
+    Controller(ros::NodeHandle& nh) : tree_spec(new predikct::TreeSpec), robot(new predikct::RobotModel),
+    user(new predikct::UserModel), reward(new predikct::RewardCalculator)
     {
-        // Define Subs & Pubs to receive current joint states and task space motion requests and publish joint velocity commands
+        ReadParams();
         joint_sub = nh.subscribe<sensor_msgs::JointState>("joint_states", 1, boost::bind(&Controller::JointUpdateCallback, this, _1));
         vel_command_sub = nh.subscribe<geometry_msgs::Twist>("teleop_commands", 1, boost::bind(&Controller::VelocityCommandCallback, this, _1));
         command_pub = nh.advertise<sensor_msgs::JointState>("joint_commands", 1);
 
-        // Set tree parameters. These can be defined as needed but should be tuned for your use case
-        // Larger trees will typically provide smoother movement for a given time interval, but will require that time interval to be larger
-        // Reward parameters can be configured to emphasize different components (or you can define a reward model that is entirely custom!)
-        tree_spec.motion_candidate_branching_factor = 6;
-        tree_spec.temporal_discount = 0.95;
-        tree_spec.time_window = 0.5;
-        tree_spec.tree_depth = 2;
-        tree_spec.user_prediction_branching_factor = 16;
-        tree_spec.velocity_primitive_set_size = 4 * tree_spec.user_prediction_branching_factor;
-        double dist_weight = -50;
-        double accel_weight = -1;
-        double manip_weight = 500;
-        double lim_weight = -2;
-        reward.SetParameters(dist_weight, accel_weight, manip_weight, lim_weight);
-
-        current_fetch_command_msg = new sensor_msgs::JointState();
         last_velocity_command = std::vector<double>(7, 0);
         last_joint_positions = std::vector<double>(7, 0);
         last_joint_velocities = std::vector<double>(7, 0);
@@ -51,6 +38,11 @@ public:
         last_received_command_time = 0;
         ReadParams();
         active = false;
+        ros::param::get("/KCT_Controller/verbose", verbose);
+        if (verbose)
+        {
+            ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Debug);
+        }
     }
 
     ~Controller()
@@ -58,17 +50,27 @@ public:
 
     void ReadParams()
     {
-        int no_of_joints;
         ros::param::get("/KCT_Controller/number_of_joints", no_of_joints);
         joint_names.clear();
         std::string new_joint_name;
-        double new_joint_limit;
         for(int i = 0; i < no_of_joints; ++i)
         {
             ros::param::get("/KCT_Controller/joint" + std::to_string(i) + "_name", new_joint_name);
             joint_names.push_back(new_joint_name);
         }
-        user = new predikct::UserModel();
+        user = boost::shared_ptr<predikct::UserModel>(new predikct::UserModel);
+        ros::param::get("/KCT_Controller/tree_spec/depth", tree_spec->tree_depth);
+        ros::param::get("/KCT_Controller/tree_spec/motion_candidate_branching_factor", tree_spec->motion_candidate_branching_factor);
+        ros::param::get("/KCT_Controller/tree_spec/user_prediction_branching_factor", tree_spec->user_prediction_branching_factor);
+        ros::param::get("/KCT_Controller/tree_spec/velocity_primitive_set_size", tree_spec->velocity_primitive_set_size);
+        ros::param::get("/KCT_Controller/tree_spec/time_window", tree_spec->time_window);
+        ros::param::get("/KCT_Controller/tree_spec/temporal_discount", tree_spec->temporal_discount);
+        double dist_weight, accel_weight, manip_weight, lim_weight;
+        ros::param::get("/KCT_Controller/reward_params/distance", dist_weight);
+        ros::param::get("/KCT_Controller/reward_params/acceleration", accel_weight);
+        ros::param::get("/KCT_Controller/reward_params/manipulability", manip_weight);
+        ros::param::get("/KCT_Controller/reward_params/limits", lim_weight);
+        reward->SetParameters(dist_weight, accel_weight, manip_weight, lim_weight);
     }
 
     void JointUpdateCallback(const sensor_msgs::JointState::ConstPtr& msg)
@@ -94,7 +96,6 @@ public:
         }
         if(new_joint_positions.size() != joint_names.size())
         {
-            // Bad message or message about joints other than the arm, discard
             return;
         }
         last_joint_positions = new_joint_positions;
@@ -140,12 +141,12 @@ public:
 
         std::vector<double>* last_velocity_msg;
         last_velocity_msg = &(current_fetch_command_msg->velocity);
-        boost::shared_ptr<predikct::MotionState> current_state( new predikct::MotionState(&last_joint_positions, &last_joint_velocities, last_velocity_msg, &last_null_vector, avg_search_time, &robot, 0.0) );
+        boost::shared_ptr<predikct::MotionState> current_state( new predikct::MotionState(&last_joint_positions, &last_joint_velocities, last_velocity_msg, &last_null_vector, avg_search_time, robot, 0.0) );
         
         double tree_start = ros::Time::now().toSec();
-        predikct::MotionCandidateNode tree_root(nullptr, &robot, current_state, 1, &tree_spec, 
-        &reward, user, &last_velocity_command);
-        tree_root.ChooseMotionCandidate(&(current_fetch_command_msg->velocity), &(last_null_vector));
+        boost::shared_ptr<predikct::MotionCandidateNode> tree_root(new predikct::MotionCandidateNode(boost::weak_ptr<predikct::TreeNode>(), robot, current_state, 1, tree_spec, reward, user, &last_velocity_command, verbose));
+        last_velocity_command = std::vector<double>(6, 0);
+        tree_root->ChooseMotionCandidate(&(current_fetch_command_msg->velocity), &(last_null_vector));
         double tree_time = ros::Time::now().toSec() - tree_start;
         avg_search_time = (avg_search_time*search_time_window.size() + tree_time - search_time_window[oldest_search_time]) / search_time_window.size();
         search_time_window[oldest_search_time] = tree_time;
@@ -169,10 +170,11 @@ public:
         PublishCommand();
     }
 
-    predikct::TreeSpec tree_spec;
+    boost::shared_ptr<predikct::TreeSpec> tree_spec;
     int loop_rate;
 
 private:
+    int no_of_joints;
     ros::Subscriber joint_sub;
     ros::Subscriber vel_command_sub;
     ros::Publisher command_pub;
@@ -183,12 +185,13 @@ private:
     std::vector<double> last_velocity_command;
     std::vector<std::string> joint_names;
     std::vector<double> joint_vel_limits;
-    predikct::RobotModel robot;
-    predikct::UserModel* user;
-    predikct::RewardCalculator reward;
+    boost::shared_ptr<predikct::RobotModel> robot;
+    boost::shared_ptr<predikct::UserModel> user;
+    boost::shared_ptr<predikct::RewardCalculator> reward;
     bool joint_update_received;
     bool command_waiting;
     bool active;
+    bool verbose;
     sensor_msgs::JointState* current_fetch_command_msg;
     double avg_search_time;
     std::vector<double> search_time_window;

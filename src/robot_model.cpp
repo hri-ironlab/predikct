@@ -57,7 +57,7 @@ void RobotModel::Init()
 
         ros::param::get("/KCT_Controller/joint" + std::to_string(i) + "_vel_limit", new_joint_limit);
         jnt_vel_limits_.push_back(new_joint_limit);
-        ROS_ERROR("joint vel limit %d: %.2f", i, jnt_vel_limits_[i]);
+        ROS_INFO("joint %d velocity limit: %.2f", i, jnt_vel_limits_[i]);
     }
 
     initialized_ = true;

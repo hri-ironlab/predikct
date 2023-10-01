@@ -30,7 +30,7 @@ double CalculateVelocityDiff(std::vector<double>* old_velocities, std::vector<do
 UserModel::UserModel() : random_generator(rd()), random_distribution(0.0, 1.0)
 { }
 
-void UserModel::SampleNoReplacement(RobotModel* robot_model, boost::shared_ptr<MotionState> state, std::vector<double>* last_velocity_command,
+void UserModel::SampleNoReplacement(boost::shared_ptr<RobotModel> robot_model, boost::shared_ptr<MotionState> state, std::vector<double>* last_velocity_command,
     std::vector<std::vector<double>>* movement_options, double movement_timestep, int num_samples, std::vector<std::vector<double>>* samples, 
     std::vector<double>* sample_probabilities)
 {
@@ -109,7 +109,7 @@ void UserModel::SampleProbabilitiesNoReplacement(std::vector<double>* probabilit
 
         if(random_result > 0)
         {
-            ROS_ERROR("ERROR: sum of probabilities of all choices is less than 1. Remaining random result: %.4f", random_result);
+            ROS_ERROR("Sum of probabilities of all choices is less than 1. Remaining random result: %.4f", random_result);
             throw;
         }
 

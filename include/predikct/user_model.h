@@ -1,5 +1,5 @@
 /*
-Defines a base class for user models for use in Iron Lab's PrediKCT Controller.
+Defines a base class for user models for use in Iron Lab's Predictive Velocity Controller.
 Subclasses from this base class should implement specific types of probabilistic user models.
 
 Author: Connor Brooks
@@ -28,7 +28,7 @@ public:
     ~UserModel()
     {}
 
-    virtual void SampleNoReplacement(RobotModel* robot_model, boost::shared_ptr<MotionState> state, std::vector<double>* last_velocity_command, std::vector<std::vector<double>>* movement_options, 
+    virtual void SampleNoReplacement(boost::shared_ptr<RobotModel> robot_model, boost::shared_ptr<MotionState> state, std::vector<double>* last_velocity_command, std::vector<std::vector<double>>* movement_options, 
         double movement_timestep, int num_samples, std::vector<std::vector<double>>* samples, std::vector<double>* sample_probabilities);
 
     void SampleProbabilitiesNoReplacement(std::vector<double>* probabilities, int num_samples, std::vector<int>* chosen_indices, std::vector<double>* chosen_probabilities);
